@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Web;
-using System.Windows.Input;
 using Newtonsoft.Json.Linq;
 
 namespace UsosApiBrowser

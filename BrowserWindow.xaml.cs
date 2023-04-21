@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using Newtonsoft.Json;
-using System.Reflection;
-using System.Diagnostics;
 
 namespace UsosApiBrowser
 {
@@ -17,7 +17,7 @@ namespace UsosApiBrowser
         /// This holds cached information on the data user is filling into various
         /// inputs. Makes it a bit easier for a user to not get annoyed with this app.
         /// </summary>
-        public VarsCache varsCache = new VarsCache();
+        public VarsCache varsCache = new();
 
         /// <summary>
         /// Used to connect to USOS API installations.
@@ -34,16 +34,11 @@ namespace UsosApiBrowser
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            if (System.Deployment.Application.ApplicationDeployment.IsNetworkDeployed)
-            {
-                System.Deployment.Application.ApplicationDeployment ad = System.Deployment.Application.ApplicationDeployment.CurrentDeployment;
-                this.Title += " (v. " + ad.CurrentVersion.ToString() + ")";
-            }
 
-            this.varsCache.BindWithTextBox("consumer_key", this.consumerKeyTextbox);
-            this.varsCache.BindWithTextBox("consumer_secret", this.consumerSecretTextbox);
-            this.varsCache.BindWithTextBox("token", this.tokenTextbox);
-            this.varsCache.BindWithTextBox("token_secret", this.tokenSecretTextbox);
+            varsCache.BindWithTextBox("consumer_key", consumerKeyTextbox);
+            varsCache.BindWithTextBox("consumer_secret", consumerSecretTextbox);
+            varsCache.BindWithTextBox("token", tokenTextbox);
+            varsCache.BindWithTextBox("token_secret", tokenSecretTextbox);
 
             /* We use a "mother installation" for the first USOS API request. We need to
              * get a list of all USOS API installations. */
@@ -52,52 +47,45 @@ namespace UsosApiBrowser
             {
                 base_url = "http://apps.usos.edu.pl/" // will change when out of Beta!
             };
-            this.apiConnector = new ApiConnector(motherInstallation);
-            this.apiConnector.BeginRequest += new EventHandler(apiConnector_BeginRequest);
-            this.apiConnector.EndRequest += new EventHandler(apiConnector_EndRequest);
+            apiConnector = new ApiConnector(motherInstallation);
+            apiConnector.BeginRequest += apiConnector_BeginRequest;
+            apiConnector.EndRequest += apiConnector_EndRequest;
 
             /* Fill up the installations list. */
 
             try
             {
-                this.installationsComboBox.Items.Clear();
-                var installations = this.apiConnector.GetInstallations();
-                installations.Add(new ApiInstallation() { base_url = "http://127.0.0.1:8000/" });
+                installationsComboBox.Items.Clear();
+                var installations = apiConnector.GetInstallations();
+                installations.Add(new ApiInstallation { base_url = "https://usosapi.ath.bielsko.pl/" });
                 foreach (var installation in installations)
                 {
-                    this.installationsComboBox.Items.Add(new ComboBoxItem
+                    installationsComboBox.Items.Add(new ComboBoxItem
                     {
                         Content = installation.base_url,
                         Tag = installation
                     });
                 }
+
+                installationsComboBox.SelectedItem = installationsComboBox.Items[^1];
             }
             catch (WebException)
             {
                 MessageBox.Show("Error occured when trying to access USOS API mother server. Could not populate USOS API installations list.",
                     "Network error", MessageBoxButton.OK, MessageBoxImage.Exclamation);
             }
-
-            if (this.installationsComboBox.Items.Count > 0)
-            {
-                /* Now we have a list of all installations in a combo box. We choose
-                 * one of them. */
-
-                this.installationsComboBox.SelectedIndex = 0;
-                this.ReloadInstallation();
-            }
         }
 
         void apiConnector_BeginRequest(object sender, EventArgs e)
         {
             /* Change a cursor to Wait when API request begins... */
-            this.Cursor = System.Windows.Input.Cursors.Wait;
+            Cursor = Cursors.Wait;
         }
 
         void apiConnector_EndRequest(object sender, EventArgs e)
         {
             /* Change a cursor back to Arrow when API request ends. */
-            this.Cursor = System.Windows.Input.Cursors.Arrow;
+            Cursor = Cursors.Arrow;
         }
 
         /// <summary>
@@ -110,7 +98,7 @@ namespace UsosApiBrowser
         /// </summary>
         private void RefreshScopes()
         {
-            this.scopes = this.apiConnector.GetScopes();
+            scopes = apiConnector.GetScopes();
         }
 
         /// <summary>
@@ -121,10 +109,10 @@ namespace UsosApiBrowser
         {
             /* Retrieving a list of all API methods. */
 
-            List<ApiMethod> methods = null;
+            List<ApiMethod> methods;
             try
             {
-                methods = this.apiConnector.GetMethods();
+                methods = apiConnector.GetMethods();
             }
             catch (WebException ex)
             {
@@ -149,7 +137,7 @@ namespace UsosApiBrowser
                 {
                     string part = path[i];
                     bool already_present = false;
-                    ItemCollection items = (i == 1) ? this.methodsTreeView.Items : currentnode.Items;
+                    ItemCollection items = (i == 1) ? methodsTreeView.Items : currentnode.Items;
                     foreach (TreeViewItem item in items)
                     {
                         if ((string)item.Header == part) {
@@ -173,7 +161,7 @@ namespace UsosApiBrowser
             /* Expand all nodes of the tree (if the are more than 50 methods in this installation,
              * then we skip this step), and select an initial method (request_token). */
 
-            foreach (TreeViewItem item in this.methodsTreeView.Items)
+            foreach (TreeViewItem item in methodsTreeView.Items)
             {
                 if (methods.Count < 50)
                     item.ExpandSubtree();
@@ -200,9 +188,9 @@ namespace UsosApiBrowser
             /* User clicked a different method in the tree. We will reset and rebuild
              * the right side of the browser window. */
 
-            TreeViewItem selected = (TreeViewItem)this.methodsTreeView.SelectedItem;
-            this.methodArgumentsTextboxes.Clear();
-            this.mainDockingPanel.Children.Clear();
+            TreeViewItem selected = (TreeViewItem)methodsTreeView.SelectedItem;
+            methodArgumentsTextboxes.Clear();
+            mainDockingPanel.Children.Clear();
             if (selected == null)
                 return;
 
@@ -217,17 +205,17 @@ namespace UsosApiBrowser
             var scrollViewer = new ScrollViewer
             {
                 Width = Double.NaN,
-                Height = this.getScrollViewerHeight(),
+                Height = getScrollViewerHeight(),
                 Margin = new Thickness(0, 0, 0, 10),
             };
             scrollViewer.Content = formStackPanel;
-            this.mainDockingPanel.Children.Add(scrollViewer);
+            mainDockingPanel.Children.Add(scrollViewer);
             DockPanel.SetDock(scrollViewer, Dock.Top);
 
             if (!(selected.Tag is ApiMethod))
                 return;
 
-            var method = this.apiConnector.GetMethod(((ApiMethod)selected.Tag).name);
+            var method = apiConnector.GetMethod(((ApiMethod)selected.Tag).name);
 
             /* A header with the method's name. */
 
@@ -243,7 +231,7 @@ namespace UsosApiBrowser
             var aBlockWithALink = new TextBlock { Margin = new Thickness(152, 2, 2, 2) };
             var methodDescriptionHyperlink = new Hyperlink { Tag = method.ref_url };
             methodDescriptionHyperlink.Inlines.Add("view full description of this method");
-            methodDescriptionHyperlink.Click += new RoutedEventHandler(methodDescriptionLink_Click);
+            methodDescriptionHyperlink.Click += methodDescriptionLink_Click;
             aBlockWithALink.Inlines.Add(methodDescriptionHyperlink);
             formStackPanel.Children.Add(aBlockWithALink);
 
@@ -280,12 +268,12 @@ namespace UsosApiBrowser
                 /* Binding textbox value to cache. This will cause the text to be automatically
                  * filled with a value that was previously entered to it. */
 
-                this.varsCache.BindWithTextBox(method.name + "#" + arg.name, textbox);
+                varsCache.BindWithTextBox(method.name + "#" + arg.name, textbox);
 
                 /* Saving each textbox instance in a dictionary, in order to easily
                  * access it later. */
 
-                this.methodArgumentsTextboxes.Add(arg.name, textbox);
+                methodArgumentsTextboxes.Add(arg.name, textbox);
 
                 /* Stacking the entire thing on the form stack panel. */
 
@@ -298,23 +286,23 @@ namespace UsosApiBrowser
 
             /* SSL checkbox. */
 
-            this.useSslCheckbox = new CheckBox { Content = "Use SSL" + (method.auth_options_ssl_required == true ? " (required)" : ""),
+            useSslCheckbox = new CheckBox { Content = "Use SSL" + (method.auth_options_ssl_required ? " (required)" : ""),
                 Margin = new Thickness(150, 0, 0, 0) };
-            formStackPanel.Children.Add(this.useSslCheckbox);
-            this.varsCache.BindWithCheckBox("use_ssl", this.useSslCheckbox);
+            formStackPanel.Children.Add(useSslCheckbox);
+            varsCache.BindWithCheckBox("use_ssl", useSslCheckbox);
 
             /* "Sign with..." checkboxes. */
 
-            this.signWithConsumerSecretCheckbox = new CheckBox { Content = "Sign with Consumer Key (" + method.auth_options_consumer + ")",
+            signWithConsumerSecretCheckbox = new CheckBox { Content = "Sign with Consumer Key (" + method.auth_options_consumer + ")",
                 Margin = new Thickness(150, 0, 0, 0) };
-            this.signWithConsumerSecretCheckbox.Checked += new RoutedEventHandler(consumersigncheckbox_Checked);
-            this.signWithConsumerSecretCheckbox.Unchecked += new RoutedEventHandler(consumersigncheckbox_Unchecked);
-            formStackPanel.Children.Add(this.signWithConsumerSecretCheckbox);
-            this.signWithTokenSecretCheckbox = new CheckBox { Content = "Sign with Token (" + method.auth_options_token + ")",
+            signWithConsumerSecretCheckbox.Checked += consumersigncheckbox_Checked;
+            signWithConsumerSecretCheckbox.Unchecked += consumersigncheckbox_Unchecked;
+            formStackPanel.Children.Add(signWithConsumerSecretCheckbox);
+            signWithTokenSecretCheckbox = new CheckBox { Content = "Sign with Token (" + method.auth_options_token + ")",
                 IsEnabled = false, Margin = new Thickness(150, 0, 0, 0) };
-            formStackPanel.Children.Add(this.signWithTokenSecretCheckbox);
-            this.varsCache.BindWithCheckBox("sign_with_consumer_key", this.signWithConsumerSecretCheckbox);
-            this.varsCache.BindWithCheckBox("sign_with_token", this.signWithTokenSecretCheckbox);
+            formStackPanel.Children.Add(signWithTokenSecretCheckbox);
+            varsCache.BindWithCheckBox("sign_with_consumer_key", signWithConsumerSecretCheckbox);
+            varsCache.BindWithCheckBox("sign_with_token", signWithTokenSecretCheckbox);
 
             /* Execute/Launch buttons. */
 
@@ -331,7 +319,7 @@ namespace UsosApiBrowser
                 Padding = new Thickness(12, 4, 12, 4),
                 Margin = new Thickness(0, 8, 0, 8)
             };
-            theExecuteButton.Click += new RoutedEventHandler(executeButton_click);
+            theExecuteButton.Click += executeButton_click;
             buttonsStack.Children.Add(theExecuteButton);
             var launchInBrowserButton = new Button
             {
@@ -339,20 +327,20 @@ namespace UsosApiBrowser
                 Padding = new Thickness(12, 4, 12, 4),
                 Margin = new Thickness(8, 8, 0, 8)
             };
-            launchInBrowserButton.Click += new RoutedEventHandler(browserButton_click);
+            launchInBrowserButton.Click += browserButton_click;
             buttonsStack.Children.Add(launchInBrowserButton);
             formStackPanel.Children.Add(buttonsStack);
 
             /* "Try to make it readable" checkbox. */
 
-            this.methodResultHumanReadableCheckbox = new CheckBox { Content = "Try to make it more human-readable" };
-            this.methodResultHumanReadableCheckbox.Click += new RoutedEventHandler(executeButton_click);
-            this.varsCache.BindWithCheckBox("make_it_readable", this.methodResultHumanReadableCheckbox);
-            formStackPanel.Children.Add(this.methodResultHumanReadableCheckbox);
+            methodResultHumanReadableCheckbox = new CheckBox { Content = "Try to make it more human-readable" };
+            methodResultHumanReadableCheckbox.Click += executeButton_click;
+            varsCache.BindWithCheckBox("make_it_readable", methodResultHumanReadableCheckbox);
+            formStackPanel.Children.Add(methodResultHumanReadableCheckbox);
 
             /* We fill all the rest of the main docking panel with a single textbox - the results. */
 
-            this.methodResultTextbox = new TextBox
+            methodResultTextbox = new TextBox
             {
                 BorderBrush = new SolidColorBrush(Colors.Gray),
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Visible,
@@ -362,18 +350,18 @@ namespace UsosApiBrowser
                 TextWrapping = TextWrapping.Wrap,
                 FontFamily = new FontFamily("Courier New")
             };
-            this.mainDockingPanel.Children.Add(this.methodResultTextbox);
+            mainDockingPanel.Children.Add(methodResultTextbox);
         }
 
         private double getScrollViewerHeight()
         {
-            var parentHeight = this.mainDockingPanel.ActualHeight;
+            var parentHeight = mainDockingPanel.ActualHeight;
             return parentHeight / 2;
         }
 
         void consumersigncheckbox_Checked(object sender, RoutedEventArgs e)
         {
-            this.signWithTokenSecretCheckbox.IsEnabled = true;
+            signWithTokenSecretCheckbox.IsEnabled = true;
         }
 
         void consumersigncheckbox_Unchecked(object sender, RoutedEventArgs e)
@@ -382,8 +370,8 @@ namespace UsosApiBrowser
              * the other one (sign with a token) disabled (you can't sign with only
              * a token). */
 
-            this.signWithTokenSecretCheckbox.IsChecked = false;
-            this.signWithTokenSecretCheckbox.IsEnabled = false;
+            signWithTokenSecretCheckbox.IsChecked = false;
+            signWithTokenSecretCheckbox.IsEnabled = false;
         }
 
         void methodDescriptionLink_Click(object sender, RoutedEventArgs e)
@@ -394,12 +382,11 @@ namespace UsosApiBrowser
             string url = (string)link.Tag;
             try
             {
-                System.Diagnostics.Process.Start(url);
+                Process.Start(url);
             }
             catch (Exception)
             {
                 MessageBox.Show("It appears your system doesn't know in which application to open a http:// protocol. Check your browser settings.\n\n" + url);
-                return;
             }
         }
         
@@ -410,7 +397,7 @@ namespace UsosApiBrowser
         Dictionary<string, string> GetMethodArgs()
         {
             Dictionary<string, string> results = new Dictionary<string, string>();
-            foreach (var pair in this.methodArgumentsTextboxes)
+            foreach (var pair in methodArgumentsTextboxes)
             {
                 string key = pair.Key;
                 string value = pair.Value.Text;
@@ -427,15 +414,15 @@ namespace UsosApiBrowser
         /// </summary>
         string GetMethodURL()
         {
-            TreeViewItem selected = (TreeViewItem)this.methodsTreeView.SelectedItem;
+            TreeViewItem selected = (TreeViewItem)methodsTreeView.SelectedItem;
             ApiMethod method = (ApiMethod)selected.Tag;
-            Dictionary<string, string> args = this.GetMethodArgs();
-            string url = this.apiConnector.GetURL(method, args,
-                this.signWithConsumerSecretCheckbox.IsChecked == true ? this.consumerKeyTextbox.Text : "",
-                this.signWithConsumerSecretCheckbox.IsChecked == true ? this.consumerSecretTextbox.Text : "",
-                this.signWithTokenSecretCheckbox.IsChecked == true ? this.tokenTextbox.Text : "",
-                this.signWithTokenSecretCheckbox.IsChecked == true ? this.tokenSecretTextbox.Text : "",
-                this.useSslCheckbox.IsChecked == true ? true : false);
+            Dictionary<string, string> args = GetMethodArgs();
+            string url = apiConnector.GetURL(method, args,
+                signWithConsumerSecretCheckbox.IsChecked == true ? consumerKeyTextbox.Text : "",
+                signWithConsumerSecretCheckbox.IsChecked == true ? consumerSecretTextbox.Text : "",
+                signWithTokenSecretCheckbox.IsChecked == true ? tokenTextbox.Text : "",
+                signWithTokenSecretCheckbox.IsChecked == true ? tokenSecretTextbox.Text : "",
+                useSslCheckbox.IsChecked == true);
             return url;
         }
 
@@ -446,30 +433,30 @@ namespace UsosApiBrowser
         {
             try
             {
-                string probably_json = this.apiConnector.GetResponse(this.GetMethodURL());
-                if (this.methodResultHumanReadableCheckbox.IsChecked == true)
+                string probably_json = apiConnector.GetResponse(GetMethodURL());
+                if (methodResultHumanReadableCheckbox.IsChecked == true)
                 {
                     try
                     {
-                        object obj = JsonConvert.DeserializeObject(probably_json);
+                        object? obj = JsonConvert.DeserializeObject(probably_json);
                         if (obj == null)
-                            this.methodResultTextbox.Text = probably_json;
+                            methodResultTextbox.Text = probably_json;
                         else
-                            this.methodResultTextbox.Text = obj.ToString().Replace("\\t", "    ").Replace("\\n", "\n");
+                            methodResultTextbox.Text = obj.ToString().Replace("\\t", "    ").Replace("\\n", "\n");
                     }
                     catch (JsonReaderException)
                     {
-                        this.methodResultTextbox.Text = probably_json;
+                        methodResultTextbox.Text = probably_json;
                     }
                 }
                 else
                 {
-                    this.methodResultTextbox.Text = probably_json;
+                    methodResultTextbox.Text = probably_json;
                 }
             }
             catch (WebException ex)
             {
-                this.methodResultTextbox.Text = ex.Message + "\n" + ApiConnector.ReadResponse(ex.Response);
+                methodResultTextbox.Text = ex.Message + "\n" + ApiConnector.ReadResponse(ex.Response);
             }
         }
 
@@ -480,12 +467,11 @@ namespace UsosApiBrowser
         {
             try
             {
-                System.Diagnostics.Process.Start(this.GetMethodURL());
+                Process.Start(GetMethodURL());
             }
             catch (Exception)
             {
-                MessageBox.Show("It appears your system doesn't know in which application to open a http:// protocol. Check your browser settings.\n\n" + this.GetMethodURL());
-                return;
+                MessageBox.Show("It appears your system doesn't know in which application to open a http:// protocol. Check your browser settings.\n\n" + GetMethodURL());
             }
         }
 
@@ -494,7 +480,7 @@ namespace UsosApiBrowser
         /// </summary>
         private void quickFillButton_Click(object sender, RoutedEventArgs e)
         {
-            if (this.consumerKeyTextbox.Text == "")
+            if (consumerKeyTextbox.Text == "")
             {
                 if (MessageBox.Show("In order to get Access Tokens, you have to register a Consumer Key first. " +
                     "Would you like to register a new Consumer Key now?", "Consumer Key is missing", MessageBoxButton.OKCancel,
@@ -503,11 +489,11 @@ namespace UsosApiBrowser
                     /* Direct the user to USOS API Developer Center. */
                     try
                     {
-                        System.Diagnostics.Process.Start(this.apiConnector.GetURL(new ApiMethod { name = "developers/" }));
+                        Process.Start(apiConnector.GetURL(new ApiMethod { name = "developers/" }));
                     }
                     catch (Exception)
                     {
-                        MessageBox.Show("It appears your system doesn't know in which application to open a http:// protocol. Check your browser settings.\n\n" + this.apiConnector.GetURL(new ApiMethod { name = "developers/" }));
+                        MessageBox.Show("It appears your system doesn't know in which application to open a http:// protocol. Check your browser settings.\n\n" + apiConnector.GetURL(new ApiMethod { name = "developers/" }));
                         return;
                     }
                 }
@@ -540,9 +526,9 @@ namespace UsosApiBrowser
                 string tokenstring;
                 try
                 {
-                    string request_token_url = this.apiConnector.GetURL(new ApiMethod { name = "services/oauth/request_token" },
-                        request_token_args, this.consumerKeyTextbox.Text, this.consumerSecretTextbox.Text, "", "", true);
-                    tokenstring = this.apiConnector.GetResponse(request_token_url);
+                    string request_token_url = apiConnector.GetURL(new ApiMethod { name = "services/oauth/request_token" },
+                        request_token_args, consumerKeyTextbox.Text, consumerSecretTextbox.Text, "", "", true);
+                    tokenstring = apiConnector.GetResponse(request_token_url);
                 }
                 catch (WebException ex)
                 {
@@ -550,9 +536,9 @@ namespace UsosApiBrowser
                      * developer installations (which do not support SSL by default). If it still
                      * throws exceptions, pass. */
 
-                    string request_token_url = this.apiConnector.GetURL(new ApiMethod { name = "services/oauth/request_token" },
-                        request_token_args, this.consumerKeyTextbox.Text, this.consumerSecretTextbox.Text, "", "", false);
-                    tokenstring = this.apiConnector.GetResponse(request_token_url);
+                    string request_token_url = apiConnector.GetURL(new ApiMethod { name = "services/oauth/request_token" },
+                        request_token_args, consumerKeyTextbox.Text, consumerSecretTextbox.Text);
+                    tokenstring = apiConnector.GetResponse(request_token_url);
                 }
                 
                 string request_token = null;
@@ -575,10 +561,10 @@ namespace UsosApiBrowser
 
                 var authorize_args = new Dictionary<string, string>();
                 authorize_args.Add("oauth_token", request_token);
-                var authorize_url = this.apiConnector.GetURL(new ApiMethod { name = "services/oauth/authorize" }, authorize_args);
+                var authorize_url = apiConnector.GetURL(new ApiMethod { name = "services/oauth/authorize" }, authorize_args);
                 try
                 {
-                    System.Diagnostics.Process.Start(authorize_url);
+                    Process.Start(authorize_url);
                 }
                 catch (Exception)
                 {
@@ -599,9 +585,9 @@ namespace UsosApiBrowser
                 access_token_args.Add("oauth_verifier", verifier);
                 try
                 {
-                    var access_token_url = this.apiConnector.GetURL(new ApiMethod { name = "services/oauth/access_token" }, access_token_args,
-                        this.consumerKeyTextbox.Text, this.consumerSecretTextbox.Text, request_token, request_token_secret, true);
-                    tokenstring = this.apiConnector.GetResponse(access_token_url);
+                    var access_token_url = apiConnector.GetURL(new ApiMethod { name = "services/oauth/access_token" }, access_token_args,
+                        consumerKeyTextbox.Text, consumerSecretTextbox.Text, request_token, request_token_secret, true);
+                    tokenstring = apiConnector.GetResponse(access_token_url);
                 }
                 catch (WebException ex)
                 {
@@ -609,9 +595,9 @@ namespace UsosApiBrowser
                      * developer installations (which do not support SSL by default). If it still
                      * throws exceptions, pass. */
 
-                    var access_token_url = this.apiConnector.GetURL(new ApiMethod { name = "services/oauth/access_token" }, access_token_args,
-                        this.consumerKeyTextbox.Text, this.consumerSecretTextbox.Text, request_token, request_token_secret, false);
-                    tokenstring = this.apiConnector.GetResponse(access_token_url);
+                    var access_token_url = apiConnector.GetURL(new ApiMethod { name = "services/oauth/access_token" }, access_token_args,
+                        consumerKeyTextbox.Text, consumerSecretTextbox.Text, request_token, request_token_secret);
+                    tokenstring = apiConnector.GetResponse(access_token_url);
                 }
                 
 
@@ -635,8 +621,8 @@ namespace UsosApiBrowser
 
                 /* Fill up the token textboxes with an Access Token we received. */
 
-                this.tokenTextbox.Text = access_token;
-                this.tokenSecretTextbox.Text = access_token_secret;
+                tokenTextbox.Text = access_token;
+                tokenSecretTextbox.Text = access_token_secret;
             }
             catch (WebException ex)
             {
@@ -648,73 +634,73 @@ namespace UsosApiBrowser
 
         private void ReloadInstallation()
         {
-            this.methodsTreeView.Items.Clear();
-            this.quickFillButton.IsEnabled = false;
+            methodsTreeView.Items.Clear();
+            quickFillButton.IsEnabled = false;
             
             /* Checking which installation is selected in a combo box. */
 
-            if (this.apiConnector.currentInstallation.base_url != this.installationsComboBox.Text)
+            if (apiConnector.currentInstallation.base_url != installationsComboBox.Text)
             {
-                this.apiConnector.SwitchInstallation(new ApiInstallation { base_url = this.installationsComboBox.Text });
+                apiConnector.SwitchInstallation(new ApiInstallation { base_url = installationsComboBox.Text });
             }
 
-            if (!this.RefreshTree())
+            if (!RefreshTree())
                 return;
-            this.RefreshScopes();
+            RefreshScopes();
 
             /* We did retrieve the list of methods, so the installation URL is OK. If it was
              * entered manually (was not on the installation list in a combo box), then we add
              * it to the list. */
 
             var onthelist = false;
-            foreach (object item in this.installationsComboBox.Items)
+            foreach (object item in installationsComboBox.Items)
             {
                 ApiInstallation itemapi = (ApiInstallation)((ComboBoxItem)item).Tag;
-                if (itemapi.base_url == this.apiConnector.currentInstallation.base_url)
+                if (itemapi.base_url == apiConnector.currentInstallation.base_url)
                     onthelist = true;
             }
             if (!onthelist)
             {
-                this.installationsComboBox.Items.Add(new ComboBoxItem
+                installationsComboBox.Items.Add(new ComboBoxItem
                 {
-                    Content = this.apiConnector.currentInstallation.base_url,
-                    Tag = this.apiConnector.currentInstallation
+                    Content = apiConnector.currentInstallation.base_url,
+                    Tag = apiConnector.currentInstallation
                 });
             }
-            this.quickFillButton.IsEnabled = true;
+            quickFillButton.IsEnabled = true;
 
         }
 
         private void installationRefreshButton_Click(object sender, RoutedEventArgs e)
         {
-            this.ReloadInstallation();
+            ReloadInstallation();
         }
 
         private void installationsComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (this.dropdownopen)
+            if (dropdownopen)
             {
                 //this.ReloadInstallation();
             }
         }
 
-        private bool dropdownopen = false;
+        private bool dropdownopen;
         private CheckBox runAsUserCheckbox;
         private void installationsComboBox_DropDownClosed(object sender, EventArgs e)
         {
-            this.dropdownopen = false;
+            dropdownopen = false;
         }
 
         private void installationsComboBox_DropDownOpened(object sender, EventArgs e)
         {
-            this.dropdownopen = true;
+            dropdownopen = true;
         }
 
-        private void installationsComboBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        private void installationsComboBox_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == System.Windows.Input.Key.Enter)
+            if (e.Key == Key.Enter)
             {
-                this.ReloadInstallation();
+                ReloadInstallation();
             }
         }
     }
